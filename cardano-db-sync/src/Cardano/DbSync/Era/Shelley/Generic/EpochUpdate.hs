@@ -1,5 +1,6 @@
 module Cardano.DbSync.Era.Shelley.Generic.EpochUpdate
-  ( EpochUpdate (..)
+  ( NewEpoch (..)
+  , EpochUpdate (..)
   , allegraEpochUpdate
   , maryEpochUpdate
   , shelleyEpochUpdate
@@ -12,12 +13,18 @@ import           Cardano.DbSync.Era.Shelley.Generic.StakeDist
 
 import           Data.Maybe (fromMaybe)
 
+import           Ouroboros.Consensus.Block (EpochNo)
 import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardAllegra, StandardMary,
                    StandardShelley)
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
+
+data NewEpoch = NewEpoch
+  { epoch :: !EpochNo
+  , epochUpdate :: !(Maybe EpochUpdate)
+  }
 
 data EpochUpdate = EpochUpdate
   { euProtoParams :: !ProtoParams

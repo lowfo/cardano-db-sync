@@ -146,7 +146,7 @@ runDbSyncNode plugin enp =
           GenesisCardano _ bCfg _sCfg -> do
             ledgerVar <- initLedgerStateVar genCfg
 
-            saveCurrentLedgerState (envLedgerStateDir genesisEnv) ledgerVar
+            saveCurrentLedgerState (envLedgerStateDir genesisEnv) ledgerVar Nothing
             latestSlot <- SlotNo <$> DB.runDbNoLogging DB.queryLatestSlotNo
             deleteNewerLedgerStateFiles (envLedgerStateDir genesisEnv) latestSlot
 

@@ -121,7 +121,7 @@ insertShelleyBlock tracer env blk lStateSnap details = do
         , ", hash ", renderByteArray (Generic.blkHash blk)
         ]
 
-    whenJust (lssEpochUpdate lStateSnap) $ \ esum -> do
+    whenJust (lssNewEpoch lStateSnap) $ \ newEpoch -> whenJust (Generic.epochUpdate newEpoch) $ \esum -> do
       let stakes = Generic.euStakeDistribution esum
       whenJust (Generic.euRewards esum) $ \ grewards -> do
         liftIO $ logInfo tracer $ mconcat
