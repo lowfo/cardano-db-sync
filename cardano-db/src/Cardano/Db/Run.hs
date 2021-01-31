@@ -30,7 +30,7 @@ import qualified Data.Text.Lazy.Builder as LT
 import qualified Data.Text.Lazy.IO as LT
 
 import           Database.Persist.Postgresql (openSimpleConn, withPostgresqlConn)
-import           Database.Persist.Sql (IsolationLevel (..), SqlBackend, runSqlConnWithIsolation)
+import           Database.Persist.Sql (IsolationLevel (..), runSqlConnWithIsolation)
 import           Database.PostgreSQL.Simple (connectPostgreSQL)
 
 import           Database.Esqueleto

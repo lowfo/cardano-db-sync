@@ -8,23 +8,18 @@ module Cardano.DbSync.Plugin.Epoch
   , epochPluginRollbackBlock
   ) where
 
+import           Cardano.Prelude hiding (from, on, replace)
+
 import           Cardano.BM.Trace (Trace, logError, logInfo)
 
 import qualified Cardano.Chain.Block as Byron
-import           Cardano.DbSync.Config.Types
 import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..))
 
-import           Control.Monad (void, when)
-import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Control (MonadBaseControl)
-import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.IORef (IORef, atomicWriteIORef, newIORef, readIORef)
-import           Data.Maybe (fromMaybe, isNothing)
-import           Data.Text (Text)
 import qualified Data.Time.Clock as Time
-import           Data.Word (Word64)
 
 import           Database.Esqueleto (Value (..), desc, from, limit, orderBy, select, val, where_,
                    (==.), (^.))
@@ -32,12 +27,14 @@ import           Database.Esqueleto (Value (..), desc, from, limit, orderBy, sel
 import           Database.Persist.Class (replace)
 import           Database.Persist.Sql (SqlBackend)
 
-import           Cardano.Db (EntityField (..), EpochId, listToMaybe)
+import           Cardano.Db (EntityField (..), EpochId)
 import qualified Cardano.Db as DB
-import           Cardano.DbSync.Error
-import           Cardano.DbSync.LedgerState
-import           Cardano.DbSync.Types
-import           Cardano.DbSync.Util
+
+import           Cardano.Sync.Config.Types
+import           Cardano.Sync.Error
+import           Cardano.Sync.LedgerState
+import           Cardano.Sync.Types
+import           Cardano.Sync.Util
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
@@ -51,7 +48,6 @@ import           System.IO.Unsafe (unsafePerformIO)
 --    updated on each new block.
 --
 -- When in syncing mode, the row for the current epoch being synced may be incorrect.
-
 
 
 epochPluginOnStartup :: Trace IO Text -> ReaderT SqlBackend (LoggingT IO) ()

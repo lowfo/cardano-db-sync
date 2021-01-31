@@ -10,8 +10,8 @@ import           Cardano.Prelude
 import           Cardano.BM.Trace (Trace, logInfo)
 
 import qualified Cardano.Db as DB
-import           Cardano.DbSync.Error
-import           Cardano.DbSync.Util
+import           Cardano.Sync.Error
+import           Cardano.Sync.Util
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 

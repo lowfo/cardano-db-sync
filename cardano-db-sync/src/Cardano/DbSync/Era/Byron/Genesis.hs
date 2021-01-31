@@ -24,9 +24,10 @@ import qualified Cardano.Crypto as Crypto (Hash, fromCompactRedeemVerificationKe
                    serializeCborHash)
 
 import qualified Cardano.Db as DB
-import qualified Cardano.DbSync.Era.Byron.Util as Byron
-import           Cardano.DbSync.Error
-import           Cardano.DbSync.Util
+import           Cardano.DbSync.Era.Util (liftLookupFail)
+import qualified Cardano.Sync.Era.Byron.Util as Byron
+import           Cardano.Sync.Error
+import           Cardano.Sync.Util
 
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (newExceptT)

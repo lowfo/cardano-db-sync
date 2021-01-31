@@ -7,19 +7,23 @@ module Cardano.DbSync.Plugin.Default
   ) where
 
 
-import           Cardano.BM.Trace (Trace)
 import           Cardano.Prelude
 
-import           Cardano.DbSync.Config
+import           Cardano.BM.Trace (Trace)
+
+import qualified Cardano.Db as DB
+
 import           Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock)
-import           Cardano.DbSync.Error
-import           Cardano.DbSync.LedgerState
-import           Cardano.DbSync.Plugin
 import           Cardano.DbSync.Rollback (rollbackToSlot)
-import           Cardano.DbSync.Types
-import           Cardano.DbSync.Util
+
+import           Cardano.Sync.Config
+import           Cardano.Sync.Error
+import           Cardano.Sync.LedgerState
+import           Cardano.Sync.Plugin
+import           Cardano.Sync.Types
+import           Cardano.Sync.Util
 
 import           Control.Monad.Logger (LoggingT)
 
@@ -34,14 +38,18 @@ defDbSyncNodePlugin :: DbSyncNodePlugin
 defDbSyncNodePlugin =
   DbSyncNodePlugin
     { plugOnStartup = []
-    , plugInsertBlock = [insertDefaultBlock]
+    , plugInsertBlock = [\tracer env ledgerStateVar blockDetails ->
+        DB.runDbAction (Just tracer) $ insertDefaultBlock tracer env ledgerStateVar blockDetails]
     , plugRollbackBlock = [rollbackToSlot]
     }
 
 -- -------------------------------------------------------------------------------------------------
 
 insertDefaultBlock
-    :: Trace IO Text -> DbSyncEnv -> LedgerStateVar -> BlockDetails
+    :: Trace IO Text
+    -> DbSyncEnv
+    -> LedgerStateVar
+    -> BlockDetails
     -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
 insertDefaultBlock tracer env ledgerStateVar (BlockDetails cblk details) = do
   -- Calculate the new ledger state to pass to the DB insert functions but do not yet
