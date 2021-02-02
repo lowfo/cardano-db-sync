@@ -9,7 +9,6 @@ module Cardano.DbSync.Config
   , DbSyncProtocol (..)
   , DbSyncNodeConfig (..)
   , DbSyncNodeParams (..)
-  , DbSyncEnv (..)
   , GenesisConfig (..)
   , GenesisFile (..)
   , LedgerStateDir (..)
@@ -17,7 +16,6 @@ module Cardano.DbSync.Config
   , ShelleyConfig (..)
   , SocketPath (..)
   , cardanoLedgerConfig
-  , genesisConfigToEnv
   , genesisProtocolMagicId
   , readDbSyncNodeConfig
   , readCardanoGenesisConfig

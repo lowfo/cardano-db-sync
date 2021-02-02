@@ -39,6 +39,7 @@ library
                         Cardano.DbSync.Config.Types
                         Cardano.DbSync.Database
                         Cardano.DbSync.DbAction
+                        Cardano.DbSync.Environment
                         Cardano.DbSync.Error
 
                         Cardano.DbSync.Era

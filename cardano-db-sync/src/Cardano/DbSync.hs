@@ -38,9 +38,9 @@ import           Cardano.Db (LogFileDir (..))
 import qualified Cardano.Db as DB
 import           Cardano.DbSync.Config
 import           Cardano.DbSync.Database
+import           Cardano.DbSync.Environment
 import           Cardano.DbSync.Era
 import           Cardano.DbSync.Error
-import           Cardano.DbSync.LedgerState
 import           Cardano.DbSync.Metrics
 import           Cardano.DbSync.Plugin (DbSyncNodePlugin (..))
 import           Cardano.DbSync.Plugin.Default (defDbSyncNodePlugin)
@@ -53,12 +53,11 @@ import           Cardano.DbSync.Util
 
 import           Cardano.Prelude hiding (Nat, option, (%))
 
-import           Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..), withOrigin)
+import           Cardano.Slotting.Slot (WithOrigin (..), withOrigin)
 
 import qualified Codec.CBOR.Term as CBOR
 
 import           Control.Monad.Trans.Except.Exit (orDie)
-import           Control.Monad.Trans.Except.Extra (hoistEither)
 
 import qualified Data.ByteString.Lazy as BSL
 import           Data.Functor.Contravariant (contramap)
@@ -70,7 +69,7 @@ import           Network.Mux.Types (MuxMode (..))
 import           Network.TypedProtocol.Pipelined (Nat (Succ, Zero))
 import           Ouroboros.Network.Driver.Simple (runPipelinedPeer)
 
-import           Ouroboros.Consensus.Block.Abstract (CodecConfig, ConvertRawHash (..))
+import           Ouroboros.Consensus.Block.Abstract (CodecConfig)
 import           Ouroboros.Consensus.Byron.Ledger.Config (mkByronCodecConfig)
 import           Ouroboros.Consensus.Byron.Node ()
 import           Ouroboros.Consensus.Cardano.Block (CardanoEras, CodecConfig (..))
@@ -82,7 +81,7 @@ import           Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
 import           Ouroboros.Consensus.Shelley.Ledger.Config (CodecConfig (ShelleyCodecConfig))
 import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto)
 
-import           Ouroboros.Network.Block (BlockNo (..), HeaderHash, Point (..), Tip (..), blockNo,
+import           Ouroboros.Network.Block (BlockNo (..), Point (..), Tip (..), blockNo,
                    genesisPoint, getTipBlockNo)
 import           Ouroboros.Network.Mux (MuxPeer (..), RunMiniProtocol (..))
 import           Ouroboros.Network.NodeToClient (ClientSubscriptionParams (..), ConnectionId,
@@ -91,7 +90,6 @@ import           Ouroboros.Network.NodeToClient (ClientSubscriptionParams (..), 
                    WithAddr (..), localSnocket, localTxSubmissionPeerNull, networkErrorPolicies,
                    withIOManager)
 import qualified Ouroboros.Network.NodeToClient.Version as Network
-import qualified Ouroboros.Network.Point as Point
 
 import           Ouroboros.Network.Protocol.ChainSync.ClientPipelined
                    (ChainSyncClientPipelined (..), ClientPipelinedStIdle (..),
@@ -132,27 +130,21 @@ runDbSyncNode plugin enp =
 
     orDie renderDbSyncNodeError $ do
       genCfg <- readCardanoGenesisConfig enc
-      genesisEnv <- hoistEither $ genesisConfigToEnv enp genCfg
+      insertValidateGenesisDist trce (dncNetworkName enc) genCfg
+
       logProtocolMagicId trce $ genesisProtocolMagicId genCfg
 
       -- If the DB is empty it will be inserted, otherwise it will be validated (to make
       -- sure we are on the right chain).
-      insertValidateGenesisDist trce (dncNetworkName enc) genCfg
 
-      liftIO $ do
         -- Must run plugin startup after the genesis distribution has been inserted/validate.
-        runDbStartup trce plugin
-        case genCfg of
-          GenesisCardano _ bCfg _sCfg -> do
-            ledgerVar <- initLedgerStateVar genCfg
-
-            saveCurrentLedgerState (envLedgerStateDir genesisEnv) ledgerVar
-            latestSlot <- SlotNo <$> DB.runDbNoLogging DB.queryLatestSlotNo
-            deleteNewerLedgerStateFiles (envLedgerStateDir genesisEnv) latestSlot
-
-            loadLatestLedgerState (envLedgerStateDir genesisEnv) ledgerVar
-            runDbSyncNodeNodeClient (dncPrometheusPort enc) genesisEnv ledgerVar
-                iomgr trce plugin (cardanoCodecConfig bCfg) (enpSocketPath enp)
+      liftIO $ runDbStartup trce plugin
+      case genCfg of
+        GenesisCardano _ bCfg _sCfg -> do
+          dbSyncEnv <- ExceptT $ genesisConfigToEnv (enpLedgerStateDir enp) genCfg
+--           saveCurrentLedgerState (envLedger genesisEnv) ledgerVar
+          liftIO $ runDbSyncNodeNodeClient (dncPrometheusPort enc) dbSyncEnv
+              iomgr trce plugin (cardanoCodecConfig bCfg) (enpSocketPath enp)
   where
     cardanoCodecConfig :: Byron.Config -> CodecConfig CardanoBlock
     cardanoCodecConfig cfg =
@@ -165,10 +157,10 @@ runDbSyncNode plugin enp =
 -- -------------------------------------------------------------------------------------------------
 
 runDbSyncNodeNodeClient
-    :: Int -> DbSyncEnv -> LedgerStateVar -> IOManager -> Trace IO Text -> DbSyncNodePlugin
+    :: Int -> DbSyncEnv -> IOManager -> Trace IO Text -> DbSyncNodePlugin
     -> CodecConfig CardanoBlock -> SocketPath
     -> IO ()
-runDbSyncNodeNodeClient port env ledgerVar iomgr trce plugin codecConfig (SocketPath socketPath) = do
+runDbSyncNodeNodeClient port env iomgr trce plugin codecConfig (SocketPath socketPath) = do
   queryVar <- newStateQueryTMVar
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
   withMetricsServer port $ \ metrics ->
@@ -178,7 +170,7 @@ runDbSyncNodeNodeClient port env ledgerVar iomgr trce plugin codecConfig (Socket
       (envNetworkMagic env)
       networkSubscriptionTracers
       clientSubscriptionParams
-      (dbSyncProtocols trce env plugin metrics queryVar ledgerVar)
+      (dbSyncProtocols trce env plugin metrics queryVar)
   where
     clientSubscriptionParams =
       ClientSubscriptionParams
@@ -215,12 +207,11 @@ dbSyncProtocols
     -> DbSyncNodePlugin
     -> Metrics
     -> StateQueryTMVar CardanoBlock (Interpreter (CardanoEras StandardCrypto))
-    -> LedgerStateVar
     -> Network.NodeToClientVersion
     -> ClientCodecs CardanoBlock IO
     -> ConnectionId LocalAddress
     -> NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
-dbSyncProtocols trce env plugin metrics queryVar ledgerVar version codecs _connectionId =
+dbSyncProtocols trce env plugin metrics queryVar version codecs _connectionId =
     NodeToClientProtocols
       { localChainSyncProtocol = localChainSyncPtcl
       , localTxSubmissionProtocol = dummylocalTxSubmit
@@ -237,12 +228,12 @@ dbSyncProtocols trce env plugin metrics queryVar ledgerVar version codecs _conne
         when (version < minVersion) $ do
           logError trce versionErrorMsg
           throwIO $ ErrorCall (Text.unpack versionErrorMsg)
-        latestPoints <- getLatestPoints (envLedgerStateDir env)
+        latestPoints <- getLatestPoints env
         currentTip <- getCurrentTipBlockNo
         logDbState trce
         actionQueue <- newDbActionQueue
         race_
-            (runDbThread trce env plugin metrics actionQueue ledgerVar)
+            (runDbThread trce env plugin metrics actionQueue)
             (runPipelinedPeer
                 localChainSyncTracer
                 (cChainSyncCodec codecs)
@@ -299,20 +290,6 @@ logDbState trce = do
         (Just slotNo, Nothing) -> "slot " ++ show slotNo
         (Nothing, Just blkNo) -> "block " ++ show blkNo
         (Nothing, Nothing) -> "genesis"
-
-
-getLatestPoints :: LedgerStateDir -> IO [Point CardanoBlock]
-getLatestPoints ledgerStateDir = do
-    xs <- lsfSlotNo <<$>> listLedgerStateFilesOrdered ledgerStateDir
-    ys <- catMaybes <$> DB.runDbNoLogging (mapM DB.querySlotHash xs)
-    pure $ mapMaybe convert ys
-  where
-    convert :: (SlotNo, ByteString) -> Maybe (Point CardanoBlock)
-    convert (slot, hashBlob) =
-      Point . Point.block slot <$> convertHashBlob hashBlob
-
-    convertHashBlob :: ByteString -> Maybe (HeaderHash CardanoBlock)
-    convertHashBlob = Just . fromRawHash (Proxy @CardanoBlock)
 
 getCurrentTipBlockNo :: IO (WithOrigin BlockNo)
 getCurrentTipBlockNo = do

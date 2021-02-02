@@ -26,7 +26,7 @@ import           Cardano.Db (DbLovelace (..), DbWord64 (..))
 import qualified Cardano.Crypto.Hash as Crypto
 
 import qualified Cardano.Db as DB
-import           Cardano.DbSync.Config.Types
+import           Cardano.DbSync.Environment
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.Query
 import           Cardano.DbSync.Error

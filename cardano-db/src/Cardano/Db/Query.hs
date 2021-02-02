@@ -9,6 +9,7 @@ module Cardano.Db.Query
   , queryBlockCount
   , queryBlockHeight
   , queryBlockId
+  , queryBlockSlotNo
   , queryBlockNo
   , queryMainBlock
   , queryBlockTxCount
@@ -139,6 +140,14 @@ queryBlockId hash = do
   res <- select . from $ \ blk -> do
             where_ (blk ^. BlockHash ==. val hash)
             pure $ blk ^. BlockId
+  pure $ maybeToEither (DbLookupBlockHash hash) unValue (listToMaybe res)
+
+-- | Get the 'BlockId' associated with the given hash.
+queryBlockSlotNo :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail (Maybe Word64))
+queryBlockSlotNo hash = do
+  res <- select . from $ \ blk -> do
+            where_ (blk ^. BlockHash ==. val hash)
+            pure $ blk ^. BlockSlotNo
   pure $ maybeToEither (DbLookupBlockHash hash) unValue (listToMaybe res)
 
 queryBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe Block)

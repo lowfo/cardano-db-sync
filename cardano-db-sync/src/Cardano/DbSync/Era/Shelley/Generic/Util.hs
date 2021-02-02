@@ -34,6 +34,7 @@ import qualified Cardano.Crypto.Hash as Crypto
 import           Cardano.Db (DbLovelace (..))
 import qualified Cardano.Db as Db
 import           Cardano.DbSync.Config
+import           Cardano.DbSync.Environment
 
 import qualified Data.Binary.Put as Binary
 import qualified Data.ByteString.Base16 as Base16
@@ -57,7 +58,7 @@ annotateStakingCred :: DbSyncEnv -> Shelley.StakeCredential era -> Shelley.Rewar
 annotateStakingCred env cred =
   let network =
         case envProtocol env of
-          DbSyncProtocolCardano -> envNetwork env
+          DbSyncProtocolCardano -> leNetwork $ envLedger env
   in Shelley.RewardAcnt network cred
 
 coinToDbLovelace :: Coin -> DbLovelace
